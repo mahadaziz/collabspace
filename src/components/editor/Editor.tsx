@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import {
   EditorContent,
   useEditor,
@@ -7,13 +8,31 @@ import {
   type Editor as TiptapEditor,
 } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import Collaboration from '@tiptap/extension-collaboration';
+import * as Y from 'yjs';
+import { WebsocketProvider } from 'y-websocket';
 
 export function Editor() {
-  const editor = useEditor({
-    extensions: [StarterKit],
-    content: '<p>Start typing…</p>',
-    immediatelyRender: false,
-  });
+  const [ydoc] = useState(() => new Y.Doc());
+
+  useEffect(() => {
+    const provider = new WebsocketProvider('ws://localhost:1234', 'demo-room', ydoc);
+    return () => {
+      provider.destroy();
+      ydoc.destroy();
+    };
+  }, [ydoc]);
+
+  const editor = useEditor(
+    {
+      extensions: [
+        StarterKit.configure({ undoRedo: false }),
+        Collaboration.configure({ document: ydoc }),
+      ],
+      immediatelyRender: false,
+    },
+    [ydoc],
+  );
 
   if (!editor) return null;
 
