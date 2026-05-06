@@ -9,9 +9,13 @@
     "lint": "eslint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "sync": "PORT=1234 npx y-websocket"
+    "sync": "node scripts/sync-server.mjs",
+    "db:up": "docker compose up -d postgres",
+    "db:migrate": "prisma migrate dev",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.3",
     "@tiptap/extension-collaboration": "^3.22.5",
     "@tiptap/pm": "^3.22.5",
     "@tiptap/react": "^3.22.5",
@@ -29,12 +33,14 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@y/websocket-server": "^0.1.5",
+    "@y/websocket-server": "^0.1.1",
     "eslint": "^9",
     "eslint-config-next": "15.5.15",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.8.3",
+    "prisma": "^6.19.3",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "ws": "^8.20.0"
   }
 }
