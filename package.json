@@ -18,6 +18,7 @@
     "@auth/prisma-adapter": "^2.11.2",
     "@prisma/client": "^6.19.3",
     "@tiptap/extension-collaboration": "^3.22.5",
+    "@tiptap/extension-collaboration-caret": "^3.22.5",
     "@tiptap/pm": "^3.22.5",
     "@tiptap/react": "^3.22.5",
     "@tiptap/starter-kit": "^3.22.5",
