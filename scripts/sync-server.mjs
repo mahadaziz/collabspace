@@ -4,10 +4,18 @@ import { WebSocketServer } from 'ws';
 import * as Y from 'yjs';
 import { setupWSConnection, setContentInitializor, getYDoc } from '@y/websocket-server/utils';
 import { PrismaClient } from '@prisma/client';
+import { decode } from 'next-auth/jwt';
 
 const PORT = Number(process.env.PORT ?? 1234);
 const HOST = process.env.HOST ?? 'localhost';
 const DEBOUNCE_MS = 10_000;
+const SESSION_COOKIE_NAME = 'authjs.session-token';
+const AUTH_SECRET = process.env.AUTH_SECRET;
+
+if (!AUTH_SECRET) {
+  console.error('[sync] AUTH_SECRET is required to verify session tokens');
+  process.exit(1);
+}
 
 const prisma = new PrismaClient();
 const debounceTimers = new Map();
@@ -43,7 +51,7 @@ function scheduleSnapshot(docName, ydoc) {
 setContentInitializor(async (ydoc) => {
   const docName = ydoc.name;
   const row = await prisma.document.findUnique({ where: { id: docName } });
-  if (row?.content) {
+  if (row?.content && row.content.length > 0) {
     Y.applyUpdate(ydoc, new Uint8Array(row.content));
     console.log(`[sync] loaded ${docName} (${row.content.length} bytes)`);
   } else {
@@ -52,19 +60,74 @@ setContentInitializor(async (ydoc) => {
   ydoc.on('update', () => scheduleSnapshot(docName, ydoc));
 });
 
+function rejectHttp(socket, status, reason) {
+  socket.write(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\n\r\n`);
+  socket.destroy();
+}
+
 const httpServer = http.createServer((_req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('ok');
 });
+
 const wss = new WebSocketServer({ noServer: true });
+
+// authorizedConns lets us tell the connection handler whether to immediately
+// close with a WS-level 4001 (authenticated user, no access to this doc) or
+// proceed with the sync handshake.
+const authorizedConns = new WeakSet();
+
 wss.on('connection', async (conn, req) => {
+  if (!authorizedConns.has(conn)) {
+    conn.close(4001, 'Forbidden');
+    return;
+  }
   const docName = (req.url || '').slice(1).split('?')[0];
   const doc = getYDoc(docName, true);
   await doc.whenInitialized;
   setupWSConnection(conn, req);
 });
-httpServer.on('upgrade', (req, socket, head) => {
-  wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+
+httpServer.on('upgrade', async (req, socket, head) => {
+  try {
+    const url = new URL(req.url, 'http://localhost');
+    const documentId = decodeURIComponent(url.pathname.slice(1));
+    const token = url.searchParams.get('token');
+
+    if (!documentId || !token) {
+      rejectHttp(socket, 401, 'Unauthorized');
+      return;
+    }
+
+    const payload = await decode({
+      token,
+      secret: AUTH_SECRET,
+      salt: SESSION_COOKIE_NAME,
+    });
+
+    if (!payload || typeof payload.userId !== 'string') {
+      rejectHttp(socket, 401, 'Unauthorized');
+      return;
+    }
+
+    const access = await prisma.documentCollaborator.findUnique({
+      where: { userId_documentId: { userId: payload.userId, documentId } },
+    });
+
+    // Per spec, signal lack of access via WS close code 4001 (post-handshake).
+    // We complete the upgrade and let the connection handler close it.
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      if (access) authorizedConns.add(ws);
+      wss.emit('connection', ws, req);
+    });
+  } catch (err) {
+    console.error('[sync] upgrade error:', err);
+    try {
+      rejectHttp(socket, 401, 'Unauthorized');
+    } catch {
+      // socket may already be destroyed
+    }
+  }
 });
 
 async function shutdown(signal) {

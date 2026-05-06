@@ -12,16 +12,26 @@ import Collaboration from '@tiptap/extension-collaboration';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 
-export function Editor() {
+type EditorProps = {
+  docId: string;
+  title: string;
+  token: string;
+};
+
+const SYNC_URL = process.env.NEXT_PUBLIC_SYNC_URL ?? 'ws://localhost:1234';
+
+export function Editor({ docId, title, token }: EditorProps) {
   const [ydoc] = useState(() => new Y.Doc());
 
   useEffect(() => {
-    const provider = new WebsocketProvider('ws://localhost:1234', 'demo-room', ydoc);
+    const provider = new WebsocketProvider(SYNC_URL, docId, ydoc, {
+      params: { token },
+    });
     return () => {
       provider.destroy();
       ydoc.destroy();
     };
-  }, [ydoc]);
+  }, [ydoc, docId, token]);
 
   const editor = useEditor(
     {
@@ -38,6 +48,7 @@ export function Editor() {
 
   return (
     <div className="flex flex-col gap-4">
+      <h1 className="text-2xl font-semibold">{title}</h1>
       <Toolbar editor={editor} />
       <EditorContent
         editor={editor}
