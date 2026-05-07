@@ -1,0 +1,16 @@
+.terraform/
+.terraform.tfstate.lock.info
+*.tfstate
+*.tfstate.*
+
+# Local variable overrides — may contain personal email or other settings
+# that shouldn't be checked in. Commit `terraform.tfvars.example` instead
+# if you want to share an example.
+terraform.tfvars
+*.auto.tfvars
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

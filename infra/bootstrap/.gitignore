@@ -1,0 +1,23 @@
+# Local Terraform working directory and cached providers.
+.terraform/
+.terraform.tfstate.lock.info
+
+# Local state files for the bootstrap module. The bootstrap deliberately uses
+# local state because it is what creates the remote backend; if you lose this
+# state, you can recover by re-importing the resources or just letting the
+# next apply recreate them with a different random suffix.
+terraform.tfstate
+terraform.tfstate.backup
+*.tfstate
+*.tfstate.*
+
+# Crash log
+crash.log
+crash.*.log
+
+# Local override files (anything ending in _override.tf or _override.tf.json,
+# plus the conventional override.tf names)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

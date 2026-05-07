@@ -1,0 +1,22 @@
+{
+	# Email used by Let's Encrypt for cert renewal notices.
+	email maziz@evertz.com
+}
+
+collabspace.dev {
+	encode zstd gzip
+
+	# y-websocket sync. Strip the /yjs prefix so the sync server sees the
+	# document ID at the root of the URL (it parses pathname.slice(1) as the
+	# room name).
+	handle_path /yjs/* {
+		reverse_proxy sync:1234
+	}
+
+	# Everything else goes to Next.js.
+	reverse_proxy web:3000
+}
+
+www.collabspace.dev {
+	redir https://collabspace.dev{uri} permanent
+}

@@ -1,0 +1,56 @@
+ARG NODE_VERSION=20-alpine
+
+# Stage 1: install all deps (incl. dev) so we can build.
+FROM node:${NODE_VERSION} AS deps
+WORKDIR /app
+RUN apk add --no-cache libc6-compat
+COPY package.json package-lock.json ./
+COPY prisma ./prisma
+RUN npm ci
+
+# Stage 2: build the Next.js app in standalone mode.
+FROM node:${NODE_VERSION} AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+# DATABASE_URL is needed by `prisma generate` even though generate does not
+# connect. A dummy value is fine.
+ENV DATABASE_URL="postgres://build:build@localhost:5432/build?schema=public"
+RUN npx prisma generate
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+# Stage 3: minimal runtime image.
+FROM node:${NODE_VERSION} AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001 -G nodejs
+
+# Standalone bundle + static assets.
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+# Prisma migration artifacts and binaries needed at runtime.
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+
+# Entrypoint: run migrations then exec the standalone server.
+COPY --chown=nextjs:nodejs <<'ENTRY' /app/entrypoint.sh
+#!/bin/sh
+set -e
+echo "[entrypoint] running prisma migrate deploy"
+node node_modules/prisma/build/index.js migrate deploy
+echo "[entrypoint] starting next.js standalone server"
+exec node server.js
+ENTRY
+RUN chmod +x /app/entrypoint.sh
+
+USER nextjs
+EXPOSE 3000
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+CMD ["/app/entrypoint.sh"]

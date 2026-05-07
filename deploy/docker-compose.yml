@@ -1,0 +1,55 @@
+# Production compose file. Lives at /opt/collabspace/docker-compose.yml on the
+# EC2 host. Image tags come from the IMAGE_TAG env var set by the deploy script.
+
+services:
+  web:
+    image: ${ECR_WEB_REPO}:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file:
+      - .env.runtime
+    expose:
+      - '3000'
+    networks:
+      - app
+    depends_on:
+      - sync
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  sync:
+    image: ${ECR_SYNC_REPO}:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file:
+      - .env.runtime
+    expose:
+      - '1234'
+    networks:
+      - app
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - app
+    depends_on:
+      - web
+      - sync
+
+networks:
+  app:
+    driver: bridge
+
+volumes:
+  caddy-data:
+  caddy-config:

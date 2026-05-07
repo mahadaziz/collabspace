@@ -1,0 +1,28 @@
+ARG NODE_VERSION=20-alpine
+
+FROM node:${NODE_VERSION} AS deps
+WORKDIR /app
+RUN apk add --no-cache libc6-compat
+COPY package.json package-lock.json ./
+COPY prisma ./prisma
+# `npm ci --omit=dev` strips devDependencies. The sync server only needs:
+# next-auth (for jwt decode), @prisma/client, ws, y-websocket, yjs.
+RUN npm ci --omit=dev && \
+    DATABASE_URL="postgres://build:build@localhost:5432/build?schema=public" \
+    npx prisma generate
+
+FROM node:${NODE_VERSION} AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+RUN addgroup -g 1001 -S nodejs && adduser -S sync -u 1001 -G nodejs
+
+COPY --from=deps --chown=sync:nodejs /app/node_modules ./node_modules
+COPY --from=deps --chown=sync:nodejs /app/prisma ./prisma
+COPY --chown=sync:nodejs scripts/sync-server.mjs ./scripts/sync-server.mjs
+COPY --chown=sync:nodejs package.json ./package.json
+
+USER sync
+EXPOSE 1234
+ENV PORT=1234
+ENV HOST=0.0.0.0
+CMD ["node", "scripts/sync-server.mjs"]
