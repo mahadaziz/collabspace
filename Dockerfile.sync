@@ -14,14 +14,14 @@ RUN npm ci --omit=dev && \
 FROM node:${NODE_VERSION} AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-RUN addgroup -g 1001 -S nodejs && adduser -S sync -u 1001 -G nodejs
+RUN addgroup -g 1001 -S nodejs && adduser -S app -u 1001 -G nodejs
 
-COPY --from=deps --chown=sync:nodejs /app/node_modules ./node_modules
-COPY --from=deps --chown=sync:nodejs /app/prisma ./prisma
-COPY --chown=sync:nodejs scripts/sync-server.mjs ./scripts/sync-server.mjs
-COPY --chown=sync:nodejs package.json ./package.json
+COPY --from=deps --chown=app:nodejs /app/node_modules ./node_modules
+COPY --from=deps --chown=app:nodejs /app/prisma ./prisma
+COPY --chown=app:nodejs scripts/sync-server.mjs ./scripts/sync-server.mjs
+COPY --chown=app:nodejs package.json ./package.json
 
-USER sync
+USER app
 EXPOSE 1234
 ENV PORT=1234
 ENV HOST=0.0.0.0
