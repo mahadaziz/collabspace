@@ -35,7 +35,13 @@ data "aws_iam_policy_document" "ec2_app" {
       "ssm:GetParameters",
       "ssm:GetParametersByPath",
     ]
-    resources = ["arn:aws:ssm:${var.region}:${local.account_id}:parameter${local.ssm_prefix}/*"]
+    # The path-itself ARN (no trailing slash) is required for
+    # GetParametersByPath; the wildcard ARN authorizes GetParameter(s) for
+    # individual leaves under the path.
+    resources = [
+      "arn:aws:ssm:${var.region}:${local.account_id}:parameter${local.ssm_prefix}",
+      "arn:aws:ssm:${var.region}:${local.account_id}:parameter${local.ssm_prefix}/*",
+    ]
   }
 
   statement {
