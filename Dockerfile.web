@@ -27,23 +27,25 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001 -G nodejs
 
-# Standalone bundle + static assets.
+# Standalone bundle + static assets — used to serve the app.
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
-# Prisma migration artifacts and binaries needed at runtime.
-COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+# Separate side-tree just for running `prisma migrate deploy` at startup.
+# We need the full dep graph (effect, @prisma/config, etc.) here, but we
+# don't want to merge it into the standalone build's pruned node_modules.
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules /app/migrator/node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/prisma /app/migrator/prisma
 
-# Entrypoint: run migrations then exec the standalone server.
+# Entrypoint: migrate from the side-tree, then exec the standalone server.
 COPY --chown=nextjs:nodejs <<'ENTRY' /app/entrypoint.sh
 #!/bin/sh
 set -e
 echo "[entrypoint] running prisma migrate deploy"
+cd /app/migrator
 node node_modules/prisma/build/index.js migrate deploy
+cd /app
 echo "[entrypoint] starting next.js standalone server"
 exec node server.js
 ENTRY
