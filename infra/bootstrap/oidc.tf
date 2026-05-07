@@ -59,21 +59,26 @@ data "aws_iam_policy_document" "deploy" {
     resources = ["arn:aws:ecr:${var.region}:${local.account_id}:repository/${var.project_name}/*"]
   }
 
+  # SendCommand requires permission on BOTH the instance and the document.
+  # The tag condition can only be applied to the instance (the AWS-managed
+  # document has no tags), so split it into two statements.
   statement {
-    sid    = "SsmSendCommand"
-    effect = "Allow"
-    actions = [
-      "ssm:SendCommand",
-    ]
-    resources = [
-      "arn:aws:ec2:${var.region}:${local.account_id}:instance/*",
-      "arn:aws:ssm:${var.region}::document/AWS-RunShellScript",
-    ]
+    sid       = "SsmSendCommandOnTaggedInstance"
+    effect    = "Allow"
+    actions   = ["ssm:SendCommand"]
+    resources = ["arn:aws:ec2:${var.region}:${local.account_id}:instance/*"]
     condition {
       test     = "StringEquals"
       variable = "aws:ResourceTag/Project"
       values   = [var.project_name]
     }
+  }
+
+  statement {
+    sid       = "SsmSendCommandWithRunShellScript"
+    effect    = "Allow"
+    actions   = ["ssm:SendCommand"]
+    resources = ["arn:aws:ssm:${var.region}::document/AWS-RunShellScript"]
   }
 
   statement {
