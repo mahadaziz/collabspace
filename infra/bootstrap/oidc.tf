@@ -99,6 +99,18 @@ data "aws_iam_policy_document" "deploy" {
     ]
     resources = ["*"]
   }
+
+  # Read public, non-secret SSM params that get baked into the client bundle
+  # at `docker build` time (NEXT_PUBLIC_*). Scoped per-parameter so this role
+  # can never read the SecureString secrets.
+  statement {
+    sid     = "SsmReadBuildParams"
+    effect  = "Allow"
+    actions = ["ssm:GetParameter"]
+    resources = [
+      "arn:aws:ssm:${var.region}:${local.account_id}:parameter/${var.project_name}/prod/next_public_sync_url",
+    ]
+  }
 }
 
 resource "aws_iam_role_policy" "deploy" {

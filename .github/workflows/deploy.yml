@@ -50,9 +50,24 @@ jobs:
       - name: ECR login
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Fetch build-time public env from SSM
+        id: build_env
+        run: |
+          set -euo pipefail
+          SYNC_URL=$(aws ssm get-parameter \
+            --name /collabspace/prod/next_public_sync_url \
+            --query Parameter.Value --output text)
+          echo "::add-mask::$SYNC_URL"
+          echo "sync_url=$SYNC_URL" >> "$GITHUB_OUTPUT"
+
       - name: Build & push web image
         run: |
-          docker build -f Dockerfile.web -t "$ECR_WEB_REPO:${{ github.sha }}" -t "$ECR_WEB_REPO:latest" .
+          docker build \
+            -f Dockerfile.web \
+            --build-arg NEXT_PUBLIC_SYNC_URL="${{ steps.build_env.outputs.sync_url }}" \
+            -t "$ECR_WEB_REPO:${{ github.sha }}" \
+            -t "$ECR_WEB_REPO:latest" \
+            .
           docker push "$ECR_WEB_REPO:${{ github.sha }}"
           docker push "$ECR_WEB_REPO:latest"
 

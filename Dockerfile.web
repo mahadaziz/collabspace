@@ -13,6 +13,11 @@ FROM node:${NODE_VERSION} AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# NEXT_PUBLIC_* is inlined into the client bundle at build time, so it must
+# be set before `next build`. Defaulting to the local dev URL keeps `docker
+# build` working without args for local testing.
+ARG NEXT_PUBLIC_SYNC_URL=ws://localhost:1234
+ENV NEXT_PUBLIC_SYNC_URL=$NEXT_PUBLIC_SYNC_URL
 # DATABASE_URL is needed by `prisma generate` even though generate does not
 # connect. A dummy value is fine.
 ENV DATABASE_URL="postgres://build:build@localhost:5432/build?schema=public"
