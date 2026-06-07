@@ -37,5 +37,11 @@ export async function POST(req: NextRequest) {
   if (contentType.includes('application/json')) {
     return NextResponse.json({ id }, { status: 201 });
   }
-  return NextResponse.redirect(new URL(`/doc/${id}`, req.url), 303);
+  // req.url reflects the internal upstream (http://0.0.0.0:3000/...) when
+  // Next.js is behind Caddy, so build the absolute redirect from the
+  // X-Forwarded-* headers Caddy sets.
+  const proto = req.headers.get('x-forwarded-proto') ?? 'http';
+  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? '';
+  const base = host ? `${proto}://${host}` : req.url;
+  return NextResponse.redirect(new URL(`/doc/${id}`, base), 303);
 }
